@@ -237,11 +237,11 @@ function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400)
 
 function load() {
   var raw = null;
-  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
+  try { raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem('cosmic-garden-v1'); } catch (e) { raw = null; }
   if (!raw) return null;
   try {
     var s = JSON.parse(raw);
-    if (!s || s.v !== 2) return null;
+    if (!s || !(s.v >= 1)) return null;
     coins = s.coins; sci = s.sci; lvl = s.lvl || 3; xp = s.xp || 0; qi = s.qi || 0;
     if (s.stat) stat = s.stat;
     F = freshF(); F.cnt = s.cnt || 0;
