@@ -1,8 +1,11 @@
 (function () {
 var NS = 'http://www.w3.org/2000/svg';
-var SAVE_KEY = 'cosmic-garden-v1';
+var SAVE_KEY = 'cosmic-garden-v2';
 var OFFLINE_CAP = 8 * 3600;
 var NW = 150;
+var CAP = 6;
+var SPEED = 140;
+var GAP = 16;
 var C = { w: '#1fb6ff', e: '#ff9a1f', l: '#b79cff', p: '#ff7d6b', i: '#3fd3a0', m: '#ffb347', d: '#ffd84d', c: '#ffd24a', s: '#19e6d0' };
 
 function el(t, a, p) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
@@ -22,16 +25,17 @@ function ic(name, size, color) {
   return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:' + size + 'px;height:' + size + 'px;cursor:inherit"><path d="' + ICONS[name] + '"/></svg>';
 }
 
+/* Типы машин. rec: cyc — секунд на цикл, inp/out — [номер строки, сколько]. */
 var TY = {
-  well: { t: 'Колодец', c: C.w, f: 0.8, cost: 40, d: 'Даёт воду', r: [['out', 'Вода', '30/с', C.w]] },
-  lotus: { t: 'Грядка лотоса', c: C.l, f: 0.6, cost: 60, d: 'Растит лотос', r: [['in', 'Вода', '14/с', C.w], ['out', 'Лотос', '14/с', C.l]] },
-  pepper: { t: 'Грядка перца', c: C.p, f: 0.45, cost: 60, d: 'Растит перец', r: [['in', 'Вода', '10/с', C.w], ['out', 'Перец', '10/с', C.p]] },
-  ivy: { t: 'Грядка плюща', c: C.i, f: 0.8, cost: 70, d: 'Растит плющ', r: [['in', 'Вода', '18/с', C.w], ['out', 'Плющ', '18/с', C.i]] },
-  gen: { t: 'Генератор', c: C.e, f: 0.7, cost: 150, d: 'Даёт энергию', r: [['out', 'Энергия', '120 кВт', C.e]] },
-  mixer: { t: 'Смеситель', c: C.m, f: 0.78, cost: 200, d: 'Смешивает плоды', r: [['in', 'Лотос', '14/с', C.l], ['in', 'Перец', '6/с', C.p], ['in', 'Плющ', '18/с', C.i], ['in', 'Энергия', '40 кВт', C.e], ['out', 'Смесь', '26/с', C.m]] },
-  oven: { t: 'Печь', c: C.d, f: 0.55, cost: 250, d: 'Готовит блюда', r: [['in', 'Смесь', '26/с', C.m], ['in', 'Энергия', '60 кВт', C.e], ['out', 'Блюдо', '18/с', C.d]] },
-  market: { t: 'Рынок', c: C.c, cost: 300, d: 'Продаёт блюда', r: [['in', 'Блюдо', '12/с', C.d], ['out', 'Монеты', '', C.c]] },
-  lab: { t: 'Лаборатория', c: C.s, f: 0.3, cost: 400, d: 'Даёт науку', r: [['in', 'Блюдо', '6/с', C.d], ['out', 'Наука', '', C.s]] }
+  well: { t: 'Колодец', c: C.w, cost: 40, d: 'Даёт воду', r: [['out', 'Вода', '', C.w]], rec: { cyc: 0.7, out: [[0, 1]] } },
+  lotus: { t: 'Грядка лотоса', c: C.l, cost: 60, d: 'Растит лотос', r: [['in', 'Вода', '', C.w], ['out', 'Лотос', '', C.l]], rec: { cyc: 2.5, inp: [[0, 1]], out: [[1, 1]], plant: 1 } },
+  pepper: { t: 'Грядка перца', c: C.p, cost: 60, d: 'Растит перец', r: [['in', 'Вода', '', C.w], ['out', 'Перец', '', C.p]], rec: { cyc: 3, inp: [[0, 1]], out: [[1, 1]], plant: 1 } },
+  ivy: { t: 'Грядка плюща', c: C.i, cost: 70, d: 'Растит плющ', r: [['in', 'Вода', '', C.w], ['out', 'Плющ', '', C.i]], rec: { cyc: 2, inp: [[0, 1]], out: [[1, 1]], plant: 1 } },
+  gen: { t: 'Генератор', c: C.e, cost: 150, d: 'Даёт энергию', r: [['out', 'Энергия', '', C.e]], rec: { cyc: 1, out: [[0, 1]] } },
+  mixer: { t: 'Смеситель', c: C.m, cost: 200, d: 'Смешивает плоды', r: [['in', 'Лотос', '', C.l], ['in', 'Перец', '', C.p], ['in', 'Плющ', '', C.i], ['in', 'Энергия', '', C.e], ['out', 'Смесь', '', C.m]], rec: { cyc: 2.5, inp: [[0, 1], [1, 1], [2, 1], [3, 1]], out: [[4, 1]] } },
+  oven: { t: 'Печь', c: C.d, cost: 250, d: 'Готовит блюда', r: [['in', 'Смесь', '', C.m], ['in', 'Энергия', '', C.e], ['out', 'Блюдо', '', C.d]], rec: { cyc: 2, inp: [[0, 1], [1, 1]], out: [[2, 1]] } },
+  market: { t: 'Рынок', c: C.c, cost: 300, d: 'Продаёт блюда', r: [['in', 'Блюдо', '', C.d]], rec: { cyc: 1, inp: [[0, 1]], sell: 40 } },
+  lab: { t: 'Лаборатория', c: C.s, cost: 400, d: 'Даёт науку', r: [['in', 'Блюдо', '', C.d]], rec: { cyc: 1.5, inp: [[0, 1]], sci: 4 } }
 };
 
 var T = {
@@ -39,9 +43,9 @@ var T = {
   hybrid: { x: 190, y: 70, t: 'Гибриды', e: 'Скрещивание растений', cost: 0, pre: ['base'], done: 1 },
   water: { x: 190, y: 190, t: 'Автополив', e: 'Колодцы и трубы', cost: 0, pre: ['base'], done: 1 },
   shop: { x: 190, y: 310, t: 'Меню гостей', e: 'Заказы от гостей', cost: 80, pre: ['base'] },
-  speed: { x: 370, y: 70, t: 'Ускорение', e: 'Доход выше на 25%', cost: 120, pre: ['hybrid'] },
-  crystal: { x: 370, y: 190, t: 'Теплицы', e: 'Грядки размером 2×2', cost: 300, pre: ['water'] },
-  drone: { x: 370, y: 310, t: 'Дроны-пчёлы', e: 'Авто-сбор урожая', cost: 260, pre: ['shop'] },
+  speed: { x: 370, y: 70, t: 'Ускорение', e: 'Станки быстрее 25%', cost: 120, pre: ['hybrid'] },
+  crystal: { x: 370, y: 190, t: 'Теплицы', e: 'Грядки быстрее 20%', cost: 300, pre: ['water'] },
+  drone: { x: 370, y: 310, t: 'Дроны-пчёлы', e: 'Продажи +15%', cost: 260, pre: ['shop'] },
   planet: { x: 550, y: 130, t: 'Новые планеты', e: 'Вторая планета', cost: 900, pre: ['speed', 'crystal'] }
 };
 
@@ -52,28 +56,43 @@ var G = [
 ];
 var PR = [['Лотос', 85, 1], ['Перец', 140, 0], ['Плющ', 60, 1]];
 
-var coins = 1240, sci = 755, lvl = 3;
-var F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0 };
+var stat = { sold: 0, built: 0 };
+var QUESTS = [
+  { t: 'Продай 10 блюд', r: 120, p: function () { return [stat.sold, 10]; } },
+  { t: 'Поставь 2 машины', r: 200, p: function () { return [stat.built, 2]; } },
+  { t: 'Изучи «Меню гостей»', r: 150, p: function () { return [T.shop.done ? 1 : 0, 1]; } },
+  { t: 'Продай 100 блюд', r: 500, p: function () { return [stat.sold, 100]; } },
+  { t: 'Изучи «Ускорение»', r: 400, p: function () { return [T.speed.done ? 1 : 0, 1]; } },
+  { t: 'Накопи 3000 монет', r: 800, p: function () { return [Math.floor(coins), 3000]; } }
+];
+
+var coins = 1240, sci = 500, lvl = 3, xp = 0, qi = 0;
+var F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0, ref: {}, dots: [], rot: 0 };
 var tsel = null;
 var resetArmed = false;
+var QUIET = false;
+var sales = [];
+var floats = [];
 
+function newBuf(t) { return t.r.map(function () { return 0; }); }
 function addNode(type, x, y, id) {
   var t = TY[type];
   var k = id || (type + (++F.cnt));
-  F.nodes[k] = { type: type, x: x, y: y, t: t.t, c: t.c, f: t.f == null ? null : t.f, r: t.r };
+  F.nodes[k] = { type: type, x: x, y: y, t: t.t, c: t.c, r: t.r, b: newBuf(t), p: 0, busy: false, why: '' };
   return k;
 }
+function freshF() { return { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0, ref: {}, dots: [], rot: 0 }; }
 
 function defaultWorld() {
-  F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0 };
+  F = freshF();
   addNode('well', 10, 60, 'well'); addNode('lotus', 190, 20, 'lotus'); addNode('pepper', 190, 150, 'pepper'); addNode('ivy', 190, 280, 'ivy');
   addNode('gen', 10, 420, 'gen'); addNode('mixer', 370, 60, 'mixer'); addNode('oven', 550, 120, 'oven'); addNode('market', 730, 120, 'market'); addNode('lab', 730, 290, 'lab');
   [['well', 0, 'lotus', 0], ['well', 0, 'pepper', 0], ['well', 0, 'ivy', 0], ['lotus', 1, 'mixer', 0], ['pepper', 1, 'mixer', 1], ['ivy', 1, 'mixer', 2], ['gen', 0, 'mixer', 3], ['gen', 0, 'oven', 1], ['mixer', 4, 'oven', 0], ['oven', 2, 'market', 0], ['oven', 2, 'lab', 0]].forEach(function (w) {
-    F.wires.push({ a: w[0], ai: w[1], b: w[2], bi: w[3] });
+    F.wires.push({ a: w[0], ai: w[1], b: w[2], bi: w[3], q: [] });
   });
 }
 
-function hgt(n) { return 26 + n.r.length * 36 + (n.f != null ? 16 : 6); }
+function hgt(n) { return 26 + n.r.length * 36 + 30; }
 function py(n, i) { return n.y + 26 + i * 36 + 18; }
 function missing(id) {
   var n = F.nodes[id];
@@ -81,29 +100,136 @@ function missing(id) {
     return r[0] === 'in' && !F.wires.some(function (w) { return w.b === id && w.bi === i; });
   });
 }
-function calc() {
-  var inc = 0, si = 0;
-  Object.keys(F.nodes).forEach(function (id) {
-    var n = F.nodes[id];
-    var wired = F.wires.some(function (w) { return w.b === id && w.bi === 0; });
-    if (n.type === 'market' && wired) inc += 6;
-    if (n.type === 'lab' && wired) si += 1;
-  });
-  var b = T.speed.done ? 1.25 : 1;
-  return [inc * b, si * b];
+function assignK() {
+  var cnt = {};
+  F.wires.forEach(function (w) { var k = cnt[w.b] || 0; cnt[w.b] = k + 1; w.k = k; if (!w.q) w.q = []; });
+}
+function wgeom(w) {
+  var a = F.nodes[w.a], b = F.nodes[w.b];
+  var x1 = a.x + NW, y1 = py(a, w.ai), x2 = b.x, y2 = py(b, w.bi);
+  var xm = (x2 - x1 >= 30) ? x2 - 14 - (w.k || 0) * 5 : x1 + 20;
+  var pts = [[x1, y1], [xm, y1], [xm, y2], [x2, y2]];
+  var len = 0;
+  for (var i = 1; i < pts.length; i++) len += Math.abs(pts[i][0] - pts[i - 1][0]) + Math.abs(pts[i][1] - pts[i - 1][1]);
+  return { pts: pts, len: Math.max(len, 1) };
+}
+function pointAt(g, dist) {
+  var pts = g.pts, d = dist;
+  for (var i = 1; i < pts.length; i++) {
+    var sl = Math.abs(pts[i][0] - pts[i - 1][0]) + Math.abs(pts[i][1] - pts[i - 1][1]);
+    if (d <= sl || i === pts.length - 1) {
+      var t = sl ? Math.min(1, d / sl) : 1;
+      return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t];
+    }
+    d -= sl;
+  }
+  return pts[pts.length - 1];
 }
 
+/* ---------- симуляция ---------- */
+function xpNeed() { return 20 + lvl * 10; }
+function addXP(n) {
+  xp += n;
+  while (xp >= xpNeed()) {
+    xp -= xpNeed(); lvl++; coins += lvl * 50;
+    if (!QUIET) toast('Уровень ' + lvl + '! +' + (lvl * 50) + ' монет');
+  }
+}
+function cycTime(n) {
+  var rc = TY[n.type].rec, m = 1;
+  if (T.speed.done) m *= 1.25;
+  if (rc.plant) { m *= 1.15; if (T.crystal.done) m *= 1.2; }
+  return rc.cyc / m;
+}
+function floatText(x, y, txt, col) {
+  if (QUIET || !F.topLayer) return;
+  var e = el('text', { x: x, y: y, 'font-size': 14, fill: col, 'text-anchor': 'middle', 'font-weight': 'bold', stroke: '#0e1622', 'stroke-width': 3, 'paint-order': 'stroke' }, F.topLayer);
+  e.textContent = txt;
+  floats.push({ e: e, x: x, y: y, t: 0 });
+}
+function bump() {
+  if (QUIET) return;
+  var p = $('coin').parentNode;
+  p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump');
+}
+function finish(id, n, rc) {
+  (rc.out || []).forEach(function (x) { n.b[x[0]] += x[1]; });
+  if (rc.sell) {
+    var mult = 1 + 0.1 + (T.drone.done ? 0.15 : 0);
+    var v = Math.round(rc.sell * mult);
+    coins += v; stat.sold++; addXP(1);
+    sales.push([performance.now(), v]);
+    floatText(n.x + NW / 2, n.y - 4, '+' + v, '#ffd24a'); bump();
+  }
+  if (rc.sci) {
+    sci += rc.sci;
+    floatText(n.x + NW / 2, n.y - 4, '+' + rc.sci, '#19e6d0');
+  }
+  n.busy = false; n.p = 0;
+}
+function step(dt) {
+  Object.keys(F.nodes).forEach(function (id) {
+    var n = F.nodes[id], rc = TY[n.type].rec;
+    if (!n.busy) {
+      var okIn = true, why = '';
+      (rc.inp || []).forEach(function (x) { if (n.b[x[0]] < x[1]) { okIn = false; if (!why) why = 'in:' + n.r[x[0]][1]; } });
+      var room = true;
+      (rc.out || []).forEach(function (x) { if (n.b[x[0]] + x[1] > CAP) room = false; });
+      if (okIn && room) {
+        (rc.inp || []).forEach(function (x) { n.b[x[0]] -= x[1]; });
+        n.busy = true; n.p = 0; n.why = '';
+      } else n.why = !okIn ? why : 'out';
+    }
+    if (n.busy) {
+      n.p += dt / cycTime(n);
+      if (n.p >= 1) finish(id, n, rc);
+    }
+  });
+  var W = F.wires, cnt = W.length;
+  if (!cnt) return;
+  var order = W.slice().sort(function (x, y) { return (x.sent || 0) - (y.sent || 0); });
+  for (var j = 0; j < cnt; j++) {
+    var w = order[j], a = F.nodes[w.a], b = F.nodes[w.b];
+    if (!a || !b) continue;
+    var L = wgeom(w).len, sp = SPEED * dt / L;
+    if (!w.q) w.q = [];
+    for (var i = 0; i < w.q.length; i++) {
+      var lim = i === 0 ? 1 : w.q[i - 1] - GAP / L;
+      w.q[i] = Math.min(lim, w.q[i] + sp);
+    }
+    if (w.q.length && w.q[0] >= 1 && b.b[w.bi] < CAP) { w.q.shift(); b.b[w.bi]++; }
+    if (a.b[w.ai] > 0 && b.b[w.bi] + w.q.length < CAP && (w.q.length === 0 || w.q[w.q.length - 1] > GAP / L)) { a.b[w.ai]--; w.q.push(0); w.sent = (w.sent || 0) + 1; }
+  }
+}
+function simulate(secs) {
+  QUIET = true;
+  var steps = Math.ceil(Math.min(secs, OFFLINE_CAP) / 0.5);
+  for (var i = 0; i < steps; i++) step(0.5);
+  QUIET = false;
+}
+function rate() {
+  var now = performance.now(), sum = 0;
+  sales = sales.filter(function (s) { return now - s[0] < 10000; });
+  sales.forEach(function (s) { sum += s[1]; });
+  return sum / 10;
+}
+
+/* ---------- сохранение ---------- */
 var saveTimer = null;
 function save() {
   try {
     var nodes = {};
-    Object.keys(F.nodes).forEach(function (id) { var n = F.nodes[id]; nodes[id] = { type: n.type, x: n.x, y: n.y }; });
+    Object.keys(F.nodes).forEach(function (id) {
+      var n = F.nodes[id];
+      nodes[id] = { type: n.type, x: n.x, y: n.y, b: n.b, p: n.p, busy: n.busy };
+    });
     var tech = {};
     Object.keys(T).forEach(function (id) { tech[id] = { done: T[id].done ? 1 : 0, x: T[id].x, y: T[id].y }; });
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 1, coins: coins, sci: sci, lvl: lvl, savedAt: Date.now(),
-      nodes: nodes, wires: F.wires, cnt: F.cnt, tech: tech,
-      guests: G.map(function (g) { return g.d; })
+      v: 2, coins: coins, sci: sci, lvl: lvl, xp: xp, qi: qi, stat: stat, savedAt: Date.now(),
+      nodes: nodes,
+      wires: F.wires.map(function (w) { return { a: w.a, ai: w.ai, b: w.b, bi: w.bi }; }),
+      cnt: F.cnt, tech: tech, guests: G.map(function (g) { return g.d; })
     }));
   } catch (e) { /* storage unavailable */ }
 }
@@ -115,14 +241,19 @@ function load() {
   if (!raw) return null;
   try {
     var s = JSON.parse(raw);
-    if (!s || s.v !== 1) return null;
-    coins = s.coins; sci = s.sci; lvl = s.lvl || 3;
-    F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: s.cnt || 0 };
+    if (!s || s.v !== 2) return null;
+    coins = s.coins; sci = s.sci; lvl = s.lvl || 3; xp = s.xp || 0; qi = s.qi || 0;
+    if (s.stat) stat = s.stat;
+    F = freshF(); F.cnt = s.cnt || 0;
     Object.keys(s.nodes).forEach(function (id) {
       var n = s.nodes[id];
-      if (TY[n.type]) addNode(n.type, n.x, n.y, id);
+      if (!TY[n.type]) return;
+      addNode(n.type, n.x, n.y, id);
+      var m = F.nodes[id];
+      if (n.b && n.b.length === m.b.length) m.b = n.b;
+      m.p = n.p || 0; m.busy = !!n.busy;
     });
-    F.wires = (s.wires || []).filter(function (w) { return F.nodes[w.a] && F.nodes[w.b]; });
+    F.wires = (s.wires || []).filter(function (w) { return F.nodes[w.a] && F.nodes[w.b]; }).map(function (w) { w.q = []; return w; });
     Object.keys(s.tech || {}).forEach(function (id) {
       if (T[id]) { T[id].done = s.tech[id].done ? 1 : 0; T[id].x = s.tech[id].x; T[id].y = s.tech[id].y; }
     });
@@ -131,39 +262,72 @@ function load() {
   } catch (e) { return null; }
 }
 
+/* ---------- интерфейс ---------- */
+var hudT = 0;
 function hud() {
   $('coin').textContent = String(Math.floor(coins));
   $('sci').textContent = String(Math.floor(sci));
-  var c = calc();
-  $('inc').textContent = '+' + (Math.round(c[0] * 10) / 10) + ' монет/с';
+  $('inc').textContent = 'Ур. ' + lvl + ' · +' + (Math.round(rate() * 10) / 10) + '/с';
+  $('xp').firstChild.style.width = Math.min(100, xp / xpNeed() * 100) + '%';
+  updGoal();
 }
 var tt = null;
 function toast(m) {
   var t = $('toast'); t.textContent = m; t.style.opacity = 1;
-  clearTimeout(tt); tt = setTimeout(function () { t.style.opacity = 0; }, 1800);
+  clearTimeout(tt); tt = setTimeout(function () { t.style.opacity = 0; }, 2000);
+}
+
+function updGoal() {
+  var q = QUESTS[qi], box = $('goal');
+  if (!q) { box.querySelector('.gt').textContent = 'Все цели выполнены'; box.querySelector('.gbar i').style.width = '100%'; box.querySelector('.gn').textContent = ''; $('gclaim').style.display = 'none'; return; }
+  var pr = q.p(), cur = Math.min(pr[0], pr[1]), done = pr[0] >= pr[1];
+  box.querySelector('.gt').textContent = q.t;
+  box.querySelector('.gbar i').style.width = (cur / pr[1] * 100) + '%';
+  box.querySelector('.gn').textContent = cur + '/' + pr[1];
+  var b = $('gclaim');
+  b.style.display = done ? 'block' : 'none';
+  b.textContent = 'Забрать +' + q.r;
+  box.classList.toggle('ready', done);
+  var tab = document.querySelector('#nav .tab:nth-child(4)');
+  if (tab) tab.classList.toggle('dot', done);
+}
+function claimGoal() {
+  var q = QUESTS[qi]; if (!q) return;
+  var pr = q.p(); if (pr[0] < pr[1]) return;
+  coins += q.r; qi++; toast('Цель выполнена: +' + q.r + ' монет'); bump(); hud(); save();
+  if ($('p3').style.display !== 'none') ord();
+}
+
+function nodeState(id) {
+  var n = F.nodes[id];
+  if (n.busy) return { txt: 'Работает', col: n.c };
+  if (missing(id)) return { txt: 'Нет провода', col: '#ff5a4d' };
+  if (n.why === 'out') return { txt: 'Выход забит', col: '#ff5a4d' };
+  if (n.why && n.why.indexOf('in:') === 0) return { txt: 'Ждёт: ' + n.why.slice(3), col: '#ff9a1f' };
+  return { txt: 'Простой', col: '#6f8aa3' };
 }
 
 function renderF() {
   var s = $('fsc'); s.innerHTML = '';
-  var cnt = {};
+  F.ref = {}; F.dots = [];
+  assignK();
+  var op0 = function (w) { var hot = F.sel && (w.a === F.sel || w.b === F.sel); return !F.sel ? 1 : (hot ? 1 : 0.15); };
   F.wires.forEach(function (w) {
-    var a = F.nodes[w.a], b = F.nodes[w.b], col = a.r[w.ai][3];
-    var k = cnt[w.b] || 0; cnt[w.b] = k + 1;
-    var x1 = a.x + NW, y1 = py(a, w.ai), x2 = b.x, y2 = py(b, w.bi);
-    var xm = (x2 - x1 >= 30) ? x2 - 14 - k * 5 : x1 + 20;
-    var d = 'M' + x1 + ' ' + y1 + ' H' + xm + ' V' + y2 + ' H' + x2;
-    var hot = F.sel && (w.a === F.sel || w.b === F.sel);
-    var op = !F.sel ? 1 : (hot ? 1 : 0.15);
-    el('path', { d: d, fill: 'none', stroke: col, 'stroke-width': 2.4, 'stroke-linejoin': 'round', opacity: op }, s);
-    el('path', { d: d, fill: 'none', stroke: '#fff', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-dasharray': '1 15', opacity: op * 0.8, 'class': 'flow' }, s);
+    var a = F.nodes[w.a], col = a.r[w.ai][3], g = wgeom(w), p = g.pts;
+    var d = 'M' + p[0][0] + ' ' + p[0][1] + ' H' + p[1][0] + ' V' + p[2][1] + ' H' + p[3][0];
+    var op = op0(w);
+    el('path', { d: d, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-linejoin': 'round', opacity: op * 0.55 }, s);
+    el('path', { d: d, fill: 'none', stroke: '#fff', 'stroke-width': 1.4, 'stroke-linecap': 'round', 'stroke-dasharray': '1 15', opacity: op * 0.35, 'class': 'flow' }, s);
   });
+  F.dotLayer = el('g', { style: 'pointer-events:none' }, s);
   Object.keys(F.nodes).forEach(function (id) {
     var n = F.nodes[id], h = hgt(n), warn = missing(id);
     var g = el('g', { 'data-n': id, style: 'cursor:pointer' }, s);
     var stroke = F.sel === id ? '#ffffff' : (warn ? '#ff9a1f' : '#2a3b52');
+    var ref = { pips: [] };
     el('rect', { x: n.x, y: n.y, width: NW, height: h, rx: 4, fill: '#0e1622', stroke: stroke, 'stroke-width': F.sel === id ? 1.8 : 1.2 }, g);
     el('rect', { x: n.x + 1, y: n.y + 1, width: NW - 2, height: 25, rx: 3, fill: '#142031' }, g);
-    el('rect', { x: n.x + 8, y: n.y + 7, width: 12, height: 12, rx: 3, fill: n.c }, g);
+    ref.ic = el('rect', { x: n.x + 8, y: n.y + 7, width: 12, height: 12, rx: 3, fill: n.c }, g);
     el('text', { x: n.x + 27, y: n.y + 17, 'font-size': 12, fill: '#e8f1fa' }, g).textContent = n.t;
     if (warn) el('text', { x: n.x + NW - 10, y: n.y + 18, 'font-size': 14, fill: '#ff9a1f', 'text-anchor': 'end' }, g).textContent = '!';
     n.r.forEach(function (r, i) {
@@ -171,33 +335,75 @@ function renderF() {
       var live = isIn
         ? F.wires.some(function (w) { return w.b === id && w.bi === i; })
         : F.wires.some(function (w) { return w.a === id && w.ai === i; });
+      var px0 = isIn ? n.x + 14 : n.x + NW - 14 - (CAP * 9 - 2);
       if (isIn) {
         el('rect', { x: n.x - 4, y: cy - 4, width: 8, height: 8, fill: live ? r[3] : '#0e1622', stroke: r[3], 'stroke-width': 1.5 }, g);
         el('text', { x: n.x + 14, y: ry + 16, 'font-size': 12, fill: '#cfe0f0' }, g).textContent = r[1];
-        el('text', { x: n.x + 14, y: ry + 30, 'font-size': 11, fill: '#6f8aa3' }, g).textContent = r[2];
         el('rect', { x: n.x + NW - 28, y: ry + 9, width: 18, height: 18, rx: 4, fill: '#1a2a40' }, g);
         el('rect', { x: n.x + NW - 23, y: ry + 14, width: 8, height: 8, rx: 2, fill: r[3] }, g);
         var act = F.tmp || F.pend;
-        if (act && act.col === r[3] && act.id !== id) el('circle', { cx: n.x, cy: cy, r: 9, fill: 'none', stroke: r[3], 'stroke-width': 2, 'pointer-events': 'none' }, g);
-        el('circle', { cx: n.x, cy: cy, r: 17, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'in', 'data-n': id, 'data-i': i }, g);
+        if (act && act.col === r[3] && act.id !== id) el('circle', { cx: n.x, cy: cy, r: 9, fill: 'none', stroke: r[3], 'stroke-width': 2 }, g);
+        el('circle', { cx: n.x, cy: cy, r: 14, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'in', 'data-n': id, 'data-i': i }, g);
       } else {
         el('circle', { cx: n.x + NW, cy: cy, r: 4.5, fill: live ? r[3] : '#0e1622', stroke: r[3], 'stroke-width': 1.5 }, g);
         el('text', { x: n.x + NW - 14, y: ry + 16, 'font-size': 12, fill: '#cfe0f0', 'text-anchor': 'end' }, g).textContent = r[1];
-        el('text', { x: n.x + NW - 14, y: ry + 30, 'font-size': 11, fill: '#6f8aa3', 'text-anchor': 'end' }, g).textContent = r[2];
         el('rect', { x: n.x + 10, y: ry + 9, width: 18, height: 18, rx: 4, fill: '#1a2a40' }, g);
         el('rect', { x: n.x + 15, y: ry + 14, width: 8, height: 8, rx: 2, fill: r[3] }, g);
-        el('circle', { cx: n.x + NW, cy: cy, r: 17, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'out', 'data-n': id, 'data-i': i }, g);
+        if (F.pend && F.pend.id === id && F.pend.i === i) el('circle', { cx: n.x + NW, cy: cy, r: 9, fill: 'none', stroke: r[3], 'stroke-width': 2 }, g);
+        el('circle', { cx: n.x + NW, cy: cy, r: 14, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'out', 'data-n': id, 'data-i': i }, g);
       }
+      var row = [];
+      for (var j = 0; j < CAP; j++) row.push(el('rect', { x: px0 + j * 9, y: ry + 23, width: 7, height: 6, rx: 1.5, fill: j < n.b[i] ? r[3] : '#1a2a40' }, g));
+      ref.pips.push(row);
     });
-    if (n.f != null) {
-      el('rect', { x: n.x + 8, y: n.y + h - 12, width: NW - 16, height: 4, rx: 2, fill: '#1a2a40' }, g);
-      el('rect', { x: n.x + 8, y: n.y + h - 12, width: (NW - 16) * n.f, height: 4, rx: 2, fill: warn ? '#ff9a1f' : n.c }, g);
-    }
+    ref.st = el('text', { x: n.x + 10, y: n.y + h - 16, 'font-size': 11, fill: '#6f8aa3' }, g);
+    el('rect', { x: n.x + 8, y: n.y + h - 10, width: NW - 16, height: 4, rx: 2, fill: '#1a2a40' }, g);
+    ref.bar = el('rect', { x: n.x + 8, y: n.y + h - 10, width: 0, height: 4, rx: 2, fill: n.c }, g);
+    F.ref[id] = ref;
   });
   if (F.tmp) {
     var t = F.tmp, xm = (t.x + t.sx) / 2;
-    el('path', { d: 'M' + t.sx + ' ' + t.sy + ' H' + xm + ' V' + t.y + ' H' + t.x, fill: 'none', stroke: t.col, 'stroke-width': 2.4, 'stroke-dasharray': '6 5', 'pointer-events': 'none' }, s);
+    el('path', { d: 'M' + t.sx + ' ' + t.sy + ' H' + xm + ' V' + t.y + ' H' + t.x, fill: 'none', stroke: t.col, 'stroke-width': 2.4, 'stroke-dasharray': '6 5' }, s);
   }
+  F.topLayer = el('g', { style: 'pointer-events:none' }, s);
+  floats = floats.filter(function (f) { if (f.e.parentNode) { F.topLayer.appendChild(f.e); return true; } return false; });
+  updDyn();
+}
+
+function updDyn() {
+  Object.keys(F.ref).forEach(function (id) {
+    var n = F.nodes[id], r = F.ref[id];
+    if (!n) return;
+    var st = nodeState(id);
+    r.bar.setAttribute('width', (NW - 16) * (n.busy ? Math.min(1, n.p) : 0));
+    r.bar.setAttribute('fill', st.col);
+    r.st.textContent = st.txt; r.st.setAttribute('fill', st.col);
+    r.ic.setAttribute('class', n.busy ? 'busy' : '');
+    r.pips.forEach(function (row, i) {
+      var v = n.b[i], col = n.r[i][3];
+      row.forEach(function (pip, j) { pip.setAttribute('fill', j < v ? col : '#1a2a40'); });
+    });
+  });
+  var idx = 0;
+  F.wires.forEach(function (w) {
+    if (!F.nodes[w.a] || !F.nodes[w.b]) return;
+    var g = wgeom(w), col = F.nodes[w.a].r[w.ai][3];
+    (w.q || []).forEach(function (p) {
+      var pt = pointAt(g, p * g.len);
+      var c = F.dots[idx] || (F.dots[idx] = el('circle', { r: 4.4, stroke: '#fff', 'stroke-width': 0.9 }, F.dotLayer));
+      c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]); c.setAttribute('fill', col); c.style.display = '';
+      idx++;
+    });
+  });
+  for (; idx < F.dots.length; idx++) F.dots[idx].style.display = 'none';
+}
+function updFloats(dt) {
+  floats = floats.filter(function (f) {
+    f.t += dt;
+    if (f.t > 1.1) { if (f.e.parentNode) f.e.parentNode.removeChild(f.e); return false; }
+    f.e.setAttribute('y', f.y - f.t * 34); f.e.setAttribute('opacity', Math.max(0, 1 - f.t / 1.1));
+    return true;
+  });
 }
 
 function tstate(id) {
@@ -229,7 +435,11 @@ function renderT() {
     el('rect', { x: n.x + 8, y: n.y + 7, width: 12, height: 12, rx: 3, fill: ac }, g);
     el('text', { x: n.x + 27, y: n.y + 17, 'font-size': 12, fill: q === 'locked' ? '#7f94a9' : '#e8f1fa' }, g).textContent = n.t;
     el('text', { x: n.x + 10, y: n.y + 44, 'font-size': 11, fill: '#8fa7bd' }, g).textContent = n.e;
-    el('text', { x: n.x + 10, y: n.y + 66, 'font-size': 11, fill: ac }, g).textContent = q === 'done' ? 'Изучено' : (n.cost + ' науки');
+    el('text', { x: n.x + 10, y: n.y + 62, 'font-size': 11, fill: ac }, g).textContent = q === 'done' ? 'Изучено' : (n.cost + ' науки');
+    if (q === 'open') {
+      el('rect', { x: n.x + 8, y: n.y + 68, width: NW - 16, height: 4, rx: 2, fill: '#1a2a40' }, g);
+      el('rect', { x: n.x + 8, y: n.y + 68, width: (NW - 16) * Math.min(1, sci / n.cost), height: 4, rx: 2, fill: '#ff9a1f' }, g);
+    }
     if (n.pre.length) el('rect', { x: n.x - 4, y: n.y + 35, width: 8, height: 8, fill: ac }, g);
     el('circle', { cx: n.x + NW, cy: n.y + 39, r: 4.5, fill: ac }, g);
   });
@@ -243,7 +453,7 @@ function tsheet() {
     d.textContent = n.e + ' · изучено'; b.textContent = 'Готово'; b.style.background = '#12352f'; b.style.color = '#19e6d0';
   } else if (q === 'open') {
     var can = sci >= n.cost;
-    d.textContent = n.e + ' · ' + n.cost + ' науки'; b.textContent = can ? 'Изучить' : 'Мало науки';
+    d.textContent = n.e + ' · ' + Math.floor(sci) + '/' + n.cost + ' науки'; b.textContent = can ? 'Изучить' : 'Мало науки';
     b.style.background = can ? '#ff9a1f' : '#2a3b52'; b.style.color = can ? '#2a1800' : '#8fa7bd';
   } else {
     var need = n.pre.filter(function (p) { return !T[p].done; }).map(function (p) { return T[p].t; }).join(', ');
@@ -371,18 +581,20 @@ function bind(svg, vb, cb) {
   };
 }
 
-var fvb = { x: 150, y: 10, w: 400, h: 470 }, fhome = { x: 150, y: 10, w: 400, h: 470 };
-var tvb = { x: 0, y: 30, w: 400, h: 470 }, thome = { x: 0, y: 30, w: 400, h: 470 };
-var fb, tb2;
+
 
 function connect(src, bid, bi) {
   var bn = F.nodes[bid];
   if (!bn || bid === src.id || bn.r[bi][0] !== 'in' || bn.r[bi][3] !== src.col) return false;
   F.wires = F.wires.filter(function (w) { return !(w.b === bid && w.bi === bi); });
-  F.wires.push({ a: src.id, ai: src.i, b: bid, bi: bi });
+  F.wires.push({ a: src.id, ai: src.i, b: bid, bi: bi, q: [] });
   saveSoon();
   return true;
 }
+
+var fvb = { x: 130, y: -50, w: 400, h: 470 }, fhome = { x: 130, y: -50, w: 400, h: 470 };
+var tvb = { x: 0, y: 30, w: 400, h: 470 }, thome = { x: 0, y: 30, w: 400, h: 470 };
+var fb, tb2;
 
 function initGraphs() {
   fb = bind($('fs'), fvb, {
@@ -436,6 +648,7 @@ function initGraphs() {
   $('fzi').addEventListener('click', function () { fb.zoom(0.8); });
   $('fzo').addEventListener('click', function () { fb.zoom(1.25); });
   $('fzh').addEventListener('click', function () { fb.reset(fhome); });
+  $('gclaim').addEventListener('click', claimGoal);
   $('tb').addEventListener('click', function () {
     if (!tsel) return;
     var n = T[tsel];
@@ -456,7 +669,7 @@ function cat() {
     var b = document.createElement('button'); b.className = 'btn'; b.style.width = '100%'; b.textContent = 'Купить · ' + t.cost;
     b.addEventListener('click', function () {
       if (coins < t.cost) { b.textContent = 'Мало монет'; setTimeout(function () { b.textContent = 'Купить · ' + t.cost; }, 900); return; }
-      coins -= t.cost;
+      coins -= t.cost; stat.built++;
       var id = addNode(k, Math.round((fvb.x + 30) / 10) * 10, Math.round((fvb.y + 30 + (F.cnt % 6) * 40) / 10) * 10);
       F.sel = id; renderF(); hud(); show(0); toast('Поставлено: ' + t.t + '. Соедините провода'); save();
     });
@@ -467,6 +680,18 @@ function cat() {
 
 function ord() {
   var p = $('p3'); p.innerHTML = '';
+  var h0 = document.createElement('div'); h0.className = 'sub'; h0.textContent = 'Цели'; p.appendChild(h0);
+  QUESTS.forEach(function (q, i) {
+    if (i < qi - 1) return;
+    var pr = q.p(), cur = Math.min(pr[0], pr[1]);
+    var c = document.createElement('div'); c.className = 'card'; c.style.marginBottom = '6px';
+    var isDone = i < qi, active = i === qi;
+    if (isDone) c.style.opacity = '0.5';
+    if (i > qi + 1) c.style.opacity = '0.45';
+    c.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px"><span>' + (isDone ? '✓ ' : '') + q.t + '</span><span style="color:#ffd24a">+' + q.r + '</span></div>' +
+      '<div class="gbar" style="margin-top:8px"><i style="width:' + (isDone ? 100 : cur / pr[1] * 100) + '%"></i></div>';
+    p.appendChild(c);
+  });
   var h = document.createElement('div'); h.className = 'sub'; h.textContent = 'Гости ресторана'; p.appendChild(h);
   G.forEach(function (g) {
     var c = document.createElement('div'); c.className = 'card rowc'; c.style.marginBottom = '8px';
@@ -475,13 +700,13 @@ function ord() {
     b.textContent = g.d ? 'Готово' : 'Отдать · ' + g.r;
     if (g.d) { b.style.background = '#12352f'; b.style.color = '#19e6d0'; }
     b.addEventListener('click', function () {
-      if (g.d) return; g.d = 1; coins += g.r; hud(); ord(); toast('+' + g.r + ' монет'); save();
+      if (g.d) return; g.d = 1; coins += g.r; bump(); hud(); ord(); toast('+' + g.r + ' монет'); save();
     });
     c.appendChild(b); p.appendChild(c);
   });
   var h2 = document.createElement('div'); h2.className = 'sub'; h2.textContent = 'Цены на рынке'; p.appendChild(h2);
   PR.forEach(function (r) {
-    var row = document.createElement('div'); row.className = 'card'; row.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px';
+    var row = document.createElement('div'); row.className = 'card'; row.style.cssText += ';display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px';
     row.innerHTML = '<span>' + r[0] + '</span><span style="color:' + (r[2] ? '#19e6d0' : '#ff7d6b') + '">' + r[1] + (r[2] ? ' ▲' : ' ▼') + '</span>';
     p.appendChild(row);
   });
@@ -489,7 +714,7 @@ function ord() {
 
 function base() {
   var p = $('p4'); p.innerHTML = '';
-  var st = [['Уровень', lvl], ['Жителей', 14], ['Звёзды', '2'], ['Планета', 'Мята']];
+  var st = [['Уровень', lvl], ['Продано блюд', stat.sold], ['Машин', Object.keys(F.nodes).length], ['Планета', 'Мята']];
   var grid = document.createElement('div'); grid.className = 'grid2';
   st.forEach(function (s) {
     var c = document.createElement('div'); c.className = 'card';
@@ -497,20 +722,15 @@ function base() {
     grid.appendChild(c);
   });
   p.appendChild(grid);
+  var xc = document.createElement('div'); xc.className = 'card'; xc.style.marginTop = '8px';
+  xc.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:11px;color:#8fa7bd"><span>Опыт до уровня ' + (lvl + 1) + '</span><span>' + xp + '/' + xpNeed() + '</span></div><div class="gbar" style="margin-top:8px"><i style="width:' + Math.min(100, xp / xpNeed() * 100) + '%"></i></div>';
+  p.appendChild(xc);
   var h = document.createElement('div'); h.className = 'sub'; h.textContent = 'Жители'; p.appendChild(h);
-  [['Мира · садовница', 'Рост быстрее на 15%', '#3fd3a0'], ['Тоб · повар', 'Блюда дороже на 10%', '#ffb347']].forEach(function (r) {
+  [['Мира · садовница', 'Грядки быстрее на 15%', '#3fd3a0'], ['Тоб · повар', 'Блюда дороже на 10%', '#ffb347']].forEach(function (r) {
     var c = document.createElement('div'); c.className = 'card rowc'; c.style.marginBottom = '6px';
     c.innerHTML = '<div style="width:30px;height:30px;border-radius:50%;background:' + r[2] + ';flex:none"></div><div><div style="font-size:12px">' + r[0] + '</div><div style="font-size:11px;color:#8fa7bd">' + r[1] + '</div></div>';
     p.appendChild(c);
   });
-  var up = document.createElement('div'); up.className = 'card rowc'; up.style.cssText += ';margin-top:10px;border-color:#b79cff';
-  up.innerHTML = '<div class="grow"><div style="font-size:11px;color:#b79cff">Следующее улучшение</div><div style="font-size:13px;margin-top:2px">Склад холода · 900</div></div>';
-  var b = document.createElement('button'); b.className = 'btn'; b.style.background = '#b79cff'; b.style.color = '#1d1838'; b.textContent = 'Построить';
-  b.addEventListener('click', function () {
-    if (coins < 900) { b.textContent = 'Мало монет'; setTimeout(function () { b.textContent = 'Построить'; }, 900); return; }
-    coins -= 900; lvl++; hud(); base(); toast('Склад холода построен'); save();
-  });
-  up.appendChild(b); p.appendChild(up);
   var rs = document.createElement('button'); rs.className = 'btn'; rs.style.cssText += ';width:100%;margin-top:18px;background:#1a2a40;color:#8fa7bd';
   rs.textContent = resetArmed ? 'Нажмите ещё раз: сбросить всё' : 'Сбросить прогресс';
   rs.addEventListener('click', function () {
@@ -522,12 +742,12 @@ function base() {
   p.appendChild(rs);
 }
 
-var NAV = [['factory', 'Поле'], ['box', 'Каталог'], ['flask', 'Наука'], ['receipt', 'Заказы'], ['home', 'База']];
+var NAV = [['factory', 'Поле'], ['box', 'Каталог'], ['flask', 'Наука'], ['receipt', 'Цели'], ['home', 'База']];
 function show(k) {
   for (var i = 0; i < 5; i++) $('p' + i).style.display = (i === k) ? 'block' : 'none';
   if (k === 0) fb.fit();
   if (k === 1) cat();
-  if (k === 2) { tb2.fit(); tsheet(); }
+  if (k === 2) { tb2.fit(); renderT(); tsheet(); }
   if (k === 3) ord();
   if (k === 4) base();
   var nav = $('nav'); nav.innerHTML = '';
@@ -538,6 +758,7 @@ function show(k) {
     b.addEventListener('click', function () { show(i); });
     nav.appendChild(b);
   });
+  updGoal();
 }
 
 function init() {
@@ -550,23 +771,37 @@ function init() {
   defaultWorld();
   var saved = load();
   initGraphs();
-  renderF(); renderT(); hud(); show(0);
-
-  if (saved && saved.savedAt) {
-    var secs = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - saved.savedAt) / 1000));
-    var c = calc();
-    var gain = Math.floor(c[0] * secs), sgain = Math.floor(c[1] * secs);
-    if (secs > 30 && (gain > 0 || sgain > 0)) {
-      coins += gain; sci += sgain; hud();
-      toast('Пока вас не было: +' + gain + ' монет' + (sgain ? ', +' + sgain + ' науки' : ''));
-    }
+  var c0 = coins, s0 = sci;
+  if (!saved) {
+    simulate(25);
+    coins = c0; sci = s0; lvl = 3; xp = 0; stat.sold = 0; sales = [];
   }
+  if (saved && saved.savedAt) {
+    var secs = (Date.now() - saved.savedAt) / 1000;
+    if (secs > 30) simulate(secs);
+  }
+  renderF(); renderT(); show(0); hud();
+  if (coins - c0 > 0 || sci - s0 > 0) toast('Пока вас не было: +' + Math.floor(coins - c0) + ' монет, +' + Math.floor(sci - s0) + ' науки');
 
-  var ticks = 0;
-  setInterval(function () {
-    var c = calc(); coins += c[0]; sci += c[1]; hud();
-    ticks++; if (ticks % 5 === 0) save();
-  }, 1000);
+  var last = performance.now(), acc = 0, saveAcc = 0;
+  function frame(t) {
+    var raw = (t - last) / 1000; last = t;
+    if (raw > 2) {
+      var cb0 = coins, sb0 = sci;
+      simulate(raw); renderF();
+      if (coins - cb0 > 0 || sci - sb0 > 0) toast('Пока вас не было: +' + Math.floor(coins - cb0) + ' монет, +' + Math.floor(sci - sb0) + ' науки');
+      raw = 0.016;
+    }
+    var dt = Math.min(0.25, raw);
+    acc += dt;
+    while (acc >= 0.1) { step(0.1); acc -= 0.1; }
+    updDyn(); updFloats(dt);
+    hudT += dt; if (hudT > 0.25) { hudT = 0; hud(); }
+    saveAcc += dt; if (saveAcc > 5) { saveAcc = 0; save(); }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
   document.addEventListener('visibilitychange', function () { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
   window.addEventListener('resize', function () { fb.fit(); tb2.fit(); });

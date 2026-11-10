@@ -1,4 +1,4 @@
-const CACHE = 'cosmic-garden-v1';
+const CACHE = 'cosmic-garden-v2';
 const FILES = ['./', './index.html', './style.css', './game.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {
