@@ -1,0 +1,16 @@
+{
+  "name": "Cosmic Garden",
+  "short_name": "Cosmic Garden",
+  "description": "Фабрика-садовод: выращивай инопланетные растения и соединяй машины проводами",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17212f",
+  "theme_color": "#101a28",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
