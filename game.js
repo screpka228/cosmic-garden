@@ -53,7 +53,7 @@ var G = [
 var PR = [['Лотос', 85, 1], ['Перец', 140, 0], ['Плющ', 60, 1]];
 
 var coins = 1240, sci = 755, lvl = 3;
-var F = { nodes: {}, wires: [], sel: null, tmp: null, cnt: 0 };
+var F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0 };
 var tsel = null;
 var resetArmed = false;
 
@@ -65,7 +65,7 @@ function addNode(type, x, y, id) {
 }
 
 function defaultWorld() {
-  F = { nodes: {}, wires: [], sel: null, tmp: null, cnt: 0 };
+  F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: 0 };
   addNode('well', 10, 60, 'well'); addNode('lotus', 190, 20, 'lotus'); addNode('pepper', 190, 150, 'pepper'); addNode('ivy', 190, 280, 'ivy');
   addNode('gen', 10, 420, 'gen'); addNode('mixer', 370, 60, 'mixer'); addNode('oven', 550, 120, 'oven'); addNode('market', 730, 120, 'market'); addNode('lab', 730, 290, 'lab');
   [['well', 0, 'lotus', 0], ['well', 0, 'pepper', 0], ['well', 0, 'ivy', 0], ['lotus', 1, 'mixer', 0], ['pepper', 1, 'mixer', 1], ['ivy', 1, 'mixer', 2], ['gen', 0, 'mixer', 3], ['gen', 0, 'oven', 1], ['mixer', 4, 'oven', 0], ['oven', 2, 'market', 0], ['oven', 2, 'lab', 0]].forEach(function (w) {
@@ -117,7 +117,7 @@ function load() {
     var s = JSON.parse(raw);
     if (!s || s.v !== 1) return null;
     coins = s.coins; sci = s.sci; lvl = s.lvl || 3;
-    F = { nodes: {}, wires: [], sel: null, tmp: null, cnt: s.cnt || 0 };
+    F = { nodes: {}, wires: [], sel: null, tmp: null, pend: null, cnt: s.cnt || 0 };
     Object.keys(s.nodes).forEach(function (id) {
       var n = s.nodes[id];
       if (TY[n.type]) addNode(n.type, n.x, n.y, id);
@@ -177,15 +177,16 @@ function renderF() {
         el('text', { x: n.x + 14, y: ry + 30, 'font-size': 11, fill: '#6f8aa3' }, g).textContent = r[2];
         el('rect', { x: n.x + NW - 28, y: ry + 9, width: 18, height: 18, rx: 4, fill: '#1a2a40' }, g);
         el('rect', { x: n.x + NW - 23, y: ry + 14, width: 8, height: 8, rx: 2, fill: r[3] }, g);
-        if (F.tmp && F.tmp.col === r[3] && F.tmp.id !== id) el('circle', { cx: n.x, cy: cy, r: 9, fill: 'none', stroke: r[3], 'stroke-width': 2 }, g);
-        el('circle', { cx: n.x, cy: cy, r: 14, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'in', 'data-n': id, 'data-i': i }, g);
+        var act = F.tmp || F.pend;
+        if (act && act.col === r[3] && act.id !== id) el('circle', { cx: n.x, cy: cy, r: 9, fill: 'none', stroke: r[3], 'stroke-width': 2, 'pointer-events': 'none' }, g);
+        el('circle', { cx: n.x, cy: cy, r: 17, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'in', 'data-n': id, 'data-i': i }, g);
       } else {
         el('circle', { cx: n.x + NW, cy: cy, r: 4.5, fill: live ? r[3] : '#0e1622', stroke: r[3], 'stroke-width': 1.5 }, g);
         el('text', { x: n.x + NW - 14, y: ry + 16, 'font-size': 12, fill: '#cfe0f0', 'text-anchor': 'end' }, g).textContent = r[1];
         el('text', { x: n.x + NW - 14, y: ry + 30, 'font-size': 11, fill: '#6f8aa3', 'text-anchor': 'end' }, g).textContent = r[2];
         el('rect', { x: n.x + 10, y: ry + 9, width: 18, height: 18, rx: 4, fill: '#1a2a40' }, g);
         el('rect', { x: n.x + 15, y: ry + 14, width: 8, height: 8, rx: 2, fill: r[3] }, g);
-        el('circle', { cx: n.x + NW, cy: cy, r: 14, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'out', 'data-n': id, 'data-i': i }, g);
+        el('circle', { cx: n.x + NW, cy: cy, r: 17, fill: '#fff', 'fill-opacity': 0.01, 'data-port': 'out', 'data-n': id, 'data-i': i }, g);
       }
     });
     if (n.f != null) {
@@ -195,7 +196,7 @@ function renderF() {
   });
   if (F.tmp) {
     var t = F.tmp, xm = (t.x + t.sx) / 2;
-    el('path', { d: 'M' + t.sx + ' ' + t.sy + ' H' + xm + ' V' + t.y + ' H' + t.x, fill: 'none', stroke: t.col, 'stroke-width': 2.4, 'stroke-dasharray': '6 5' }, s);
+    el('path', { d: 'M' + t.sx + ' ' + t.sy + ' H' + xm + ' V' + t.y + ' H' + t.x, fill: 'none', stroke: t.col, 'stroke-width': 2.4, 'stroke-dasharray': '6 5', 'pointer-events': 'none' }, s);
   }
 }
 
@@ -252,51 +253,118 @@ function tsheet() {
 
 function bind(svg, vb, cb) {
   var d = null;
+  var ptrs = {};
+  var pinch = null;
   function setVB() { svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h); }
   function fit() {
     if (!svg.clientWidth || !svg.clientHeight) return;
     vb.h = vb.w * svg.clientHeight / svg.clientWidth; setVB();
   }
-  function wpt(e) {
-    var p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+  function wpt(cx, cy) {
+    var p = svg.createSVGPoint(); p.x = cx; p.y = cy;
     return p.matrixTransform(svg.getScreenCTM().inverse());
   }
+  function snap(v) { return Math.round(v / 10) * 10; }
+  function zoomAt(cx, cy, f) {
+    var p = wpt(cx, cy);
+    var nw = Math.min(1400, Math.max(220, vb.w * f)), s = nw / vb.w;
+    vb.x = p.x - (p.x - vb.x) * s; vb.y = p.y - (p.y - vb.y) * s;
+    vb.w = nw; vb.h = vb.h * s; setVB();
+  }
+  function applyDrag(cx, cy) {
+    var p = wpt(cx, cy);
+    if (d.mode === 'wire') cb.wireMove(p);
+    else if (d.mode === 'node') cb.move(d.id, snap(p.x + d.ox), snap(p.y + d.oy));
+  }
+  function auto() {
+    if (!d || !d.last || (d.mode !== 'wire' && d.mode !== 'node') || !d.moved) { if (d) d.raf = 0; return; }
+    var r = svg.getBoundingClientRect(), m = 48, x = d.last.x, y = d.last.y, vx = 0, vy = 0;
+    if (x < r.left + m) vx = x - (r.left + m); else if (x > r.right - m) vx = x - (r.right - m);
+    if (y < r.top + m) vy = y - (r.top + m); else if (y > r.bottom - m) vy = y - (r.bottom - m);
+    if (vx || vy) {
+      var k = vb.w / svg.clientWidth;
+      vb.x += Math.max(-m, Math.min(m, vx)) / m * 12 * k;
+      vb.y += Math.max(-m, Math.min(m, vy)) / m * 12 * k;
+      setVB(); applyDrag(d.last.x, d.last.y);
+    }
+    d.raf = requestAnimationFrame(auto);
+  }
+  function cancelDrag() {
+    if (d && d.raf) cancelAnimationFrame(d.raf);
+    if (d && d.mode === 'wire') { cb.wireCancel(); }
+    d = null;
+  }
   svg.addEventListener('pointerdown', function (e) {
+    ptrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+    svg.setPointerCapture(e.pointerId);
+    var ids = Object.keys(ptrs);
+    if (ids.length === 2) {
+      cancelDrag();
+      var a = ptrs[ids[0]], b = ptrs[ids[1]];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, w: vb.w, h: vb.h, x: vb.x, y: vb.y, mid: wpt((a.x + b.x) / 2, (a.y + b.y) / 2) };
+      return;
+    }
+    if (ids.length > 2) return;
     var pe = cb.wire && e.target.closest ? e.target.closest('[data-port]') : null;
     var ne = e.target.closest ? e.target.closest('[data-n]') : null;
     var id = ne ? ne.getAttribute('data-n') : null;
-    d = { sx: e.clientX, sy: e.clientY, moved: false, id: id, vx: vb.x, vy: vb.y, mode: 'pan', pe: pe };
+    d = { sx: e.clientX, sy: e.clientY, last: { x: e.clientX, y: e.clientY }, moved: false, id: id, vx: vb.x, vy: vb.y, mode: 'pan', pe: pe, raf: 0 };
     if (pe) { d.mode = 'wire'; cb.wireStart(pe); }
-    else if (id) { d.mode = 'node'; var p = cb.pos(id); d.nx = p[0]; d.ny = p[1]; }
-    svg.setPointerCapture(e.pointerId); svg.style.cursor = 'grabbing';
+    else if (id) { d.mode = 'node'; var p0 = cb.pos(id), w0 = wpt(e.clientX, e.clientY); d.ox = p0[0] - w0.x; d.oy = p0[1] - w0.y; }
+    svg.style.cursor = 'grabbing';
   });
   svg.addEventListener('pointermove', function (e) {
+    if (ptrs[e.pointerId]) { ptrs[e.pointerId].x = e.clientX; ptrs[e.pointerId].y = e.clientY; }
+    if (pinch) {
+      var ids = Object.keys(ptrs);
+      if (ids.length >= 2) {
+        var a = ptrs[ids[0]], b = ptrs[ids[1]];
+        var s = pinch.dist / (Math.hypot(a.x - b.x, a.y - b.y) || 1);
+        var nw = Math.min(1400, Math.max(220, pinch.w * s)), r = nw / pinch.w;
+        vb.w = nw; vb.h = pinch.h * r;
+        vb.x = pinch.mid.x - (pinch.mid.x - pinch.x) * r; vb.y = pinch.mid.y - (pinch.mid.y - pinch.y) * r;
+        setVB();
+      }
+      return;
+    }
     if (!d) return;
+    d.last = { x: e.clientX, y: e.clientY };
     var dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-    if (!d.moved && Math.sqrt(dx * dx + dy * dy) > 4) d.moved = true;
+    if (!d.moved && Math.sqrt(dx * dx + dy * dy) > 4) {
+      d.moved = true;
+      if (d.mode === 'wire' || d.mode === 'node') d.raf = requestAnimationFrame(auto);
+    }
     if (!d.moved) return;
-    var k = vb.w / svg.clientWidth;
-    if (d.mode === 'wire') cb.wireMove(wpt(e));
-    else if (d.mode === 'node') cb.move(d.id, Math.round((d.nx + dx * k) / 10) * 10, Math.round((d.ny + dy * k) / 10) * 10);
-    else { vb.x = d.vx - dx * k; vb.y = d.vy - dy * k; setVB(); }
+    if (d.mode === 'pan') {
+      var k = vb.w / svg.clientWidth;
+      vb.x = d.vx - dx * k; vb.y = d.vy - dy * k; setVB();
+    } else applyDrag(e.clientX, e.clientY);
   });
-  function end(e) {
+  function release(e) {
+    delete ptrs[e.pointerId];
+    if (pinch) { if (Object.keys(ptrs).length < 2) pinch = null; d = null; svg.style.cursor = 'grab'; return; }
     if (!d) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
     if (d.mode === 'wire') cb.wireEnd(document.elementFromPoint(e.clientX, e.clientY), d.moved, d.pe);
     else if (!d.moved) cb.tap(d.id);
     else if (d.mode === 'node') saveSoon();
     d = null; svg.style.cursor = 'grab';
   }
-  svg.addEventListener('pointerup', end);
-  svg.addEventListener('pointercancel', function () {
-    if (d && d.mode === 'wire') { F.tmp = null; renderF(); }
-    d = null; svg.style.cursor = 'grab';
+  svg.addEventListener('pointerup', release);
+  svg.addEventListener('pointercancel', function (e) {
+    delete ptrs[e.pointerId];
+    if (Object.keys(ptrs).length < 2) pinch = null;
+    cancelDrag(); svg.style.cursor = 'grab';
   });
+  svg.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, e.deltaY > 0 ? 1.12 : 0.89);
+  }, { passive: false });
   return {
     fit: fit,
     zoom: function (f) {
       var cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
-      var nw = Math.min(1000, Math.max(250, vb.w * f)), r = nw / vb.w;
+      var nw = Math.min(1400, Math.max(220, vb.w * f)), r = nw / vb.w;
       vb.w = nw; vb.h = vb.h * r; vb.x = cx - vb.w / 2; vb.y = cy - vb.h / 2; setVB();
     },
     reset: function (h) { vb.x = h.x; vb.y = h.y; vb.w = h.w; vb.h = h.h; fit(); }
@@ -307,12 +375,21 @@ var fvb = { x: 150, y: 10, w: 400, h: 470 }, fhome = { x: 150, y: 10, w: 400, h:
 var tvb = { x: 0, y: 30, w: 400, h: 470 }, thome = { x: 0, y: 30, w: 400, h: 470 };
 var fb, tb2;
 
+function connect(src, bid, bi) {
+  var bn = F.nodes[bid];
+  if (!bn || bid === src.id || bn.r[bi][0] !== 'in' || bn.r[bi][3] !== src.col) return false;
+  F.wires = F.wires.filter(function (w) { return !(w.b === bid && w.bi === bi); });
+  F.wires.push({ a: src.id, ai: src.i, b: bid, bi: bi });
+  saveSoon();
+  return true;
+}
+
 function initGraphs() {
   fb = bind($('fs'), fvb, {
     wire: true,
     pos: function (id) { return [F.nodes[id].x, F.nodes[id].y]; },
     move: function (id, x, y) { F.nodes[id].x = x; F.nodes[id].y = y; renderF(); },
-    tap: function (id) { F.sel = (id && F.sel !== id) ? id : null; renderF(); },
+    tap: function (id) { F.pend = null; F.sel = (id && F.sel !== id) ? id : null; renderF(); },
     wireStart: function (pe) {
       if (pe.getAttribute('data-port') !== 'out') return;
       var id = pe.getAttribute('data-n'), i = +pe.getAttribute('data-i'), n = F.nodes[id];
@@ -320,27 +397,32 @@ function initGraphs() {
       renderF();
     },
     wireMove: function (p) { if (F.tmp) { F.tmp.x = p.x; F.tmp.y = p.y; renderF(); } },
+    wireCancel: function () { F.tmp = null; renderF(); },
     wireEnd: function (target, moved, pe) {
       var kind = pe.getAttribute('data-port');
+      var pid = pe.getAttribute('data-n'), pi = +pe.getAttribute('data-i');
       if (kind === 'in') {
+        F.tmp = null;
         if (!moved) {
-          var bid = pe.getAttribute('data-n'), bi = +pe.getAttribute('data-i');
-          F.wires = F.wires.filter(function (w) { return !(w.b === bid && w.bi === bi); });
-          saveSoon();
-        }
-        F.tmp = null; renderF(); hud(); return;
-      }
-      var t = F.tmp; F.tmp = null;
-      if (moved && t && target && target.closest) {
-        var te = target.closest('[data-port="in"]');
-        if (te) {
-          var b2 = te.getAttribute('data-n'), i2 = +te.getAttribute('data-i'), bn = F.nodes[b2];
-          if (b2 !== t.id && bn.r[i2][3] === t.col) {
-            F.wires = F.wires.filter(function (w) { return !(w.b === b2 && w.bi === i2); });
-            F.wires.push({ a: t.id, ai: t.i, b: b2, bi: i2 });
+          if (F.pend) {
+            if (!connect(F.pend, pid, pi)) toast('Цвета не совпадают');
+            else F.pend = null;
+          } else {
+            F.wires = F.wires.filter(function (w) { return !(w.b === pid && w.bi === pi); });
             saveSoon();
           }
         }
+        renderF(); hud(); return;
+      }
+      var t = F.tmp; F.tmp = null;
+      if (!moved) {
+        var same = F.pend && F.pend.id === pid && F.pend.i === pi;
+        F.pend = same ? null : { id: pid, i: pi, col: F.nodes[pid].r[pi][3] };
+        if (F.pend) toast('Теперь тапните вход того же цвета');
+      } else if (t && target && target.closest) {
+        var te = target.closest('[data-port="in"]');
+        if (te) connect(t, te.getAttribute('data-n'), +te.getAttribute('data-i'));
+        F.pend = null;
       }
       renderF(); hud();
     }
