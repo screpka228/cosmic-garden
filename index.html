@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#101a28">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Cosmic Garden</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+<header id="hud">
+<div class="row">
+<div class="pill"><span id="ic-coin"></span><span id="coin"></span></div>
+<div class="pill"><span id="ic-flask"></span><span id="sci"></span></div>
+</div>
+<div id="inc"></div>
+</header>
+<main id="scr">
+<section class="pg" id="p0">
+<svg id="fs" viewBox="150 10 400 470" role="img" aria-label="Поле фабрики">
+<defs>
+<pattern id="g1" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#1d2a3b" stroke-width="1"/></pattern>
+<pattern id="g2" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#243449" stroke-width="1.2"/></pattern>
+</defs>
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="#17212f"/>
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="url(#g1)"/>
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="url(#g2)"/>
+<g id="fsc"></g>
+</svg>
+<div class="zoom">
+<button class="hb" id="fzi" aria-label="Приблизить"></button>
+<button class="hb" id="fzo" aria-label="Отдалить"></button>
+<button class="hb" id="fzh" aria-label="К началу"></button>
+</div>
+<div class="hint">Тяните от выхода к входу того же цвета</div>
+</section>
+<section class="pg pad" id="p1"></section>
+<section class="pg" id="p2">
+<svg id="ts" viewBox="0 30 400 470" role="img" aria-label="Дерево исследований">
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="#17212f"/>
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="url(#g1)"/>
+<rect x="-3000" y="-3000" width="7000" height="7000" fill="url(#g2)"/>
+<g id="tsc"></g>
+</svg>
+<div id="tsheet">
+<div class="sheetrow">
+<div class="grow"><div id="tn"></div><div id="td"></div></div>
+<button id="tb" class="btn"></button>
+</div>
+</div>
+</section>
+<section class="pg pad" id="p3"></section>
+<section class="pg pad" id="p4"></section>
+<div id="toast"></div>
+</main>
+<nav id="nav"></nav>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
